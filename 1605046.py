@@ -1,8 +1,10 @@
+from os import TMP_MAX
 import numpy
 import math
 from copy import deepcopy
 
 from numpy.core.numeric import ones
+from numpy.ma.core import std
 
 
 class GDistribution:
@@ -40,11 +42,10 @@ class HMM:
         self.stateCount = stateCount
         self.transitionMatrix = transitionMatrix
         self.distributions = distributions
-        self.stationaryDistribution = self.calcStationaryDistribution()
+        self.stationaryDistribution = self.calcStationaryDistribution(transitionMatrix)
         self.data = data
 
-    def calcStationaryDistribution(self):
-        tranMatrix = self.transitionMatrix
+    def calcStationaryDistribution(self, tranMatrix):
         A = deepcopy(tranMatrix)
         A = numpy.transpose(A)
         A[0] = numpy.array(ones(len(A)))
@@ -56,11 +57,10 @@ class HMM:
         return X
 
     def runViterbi(self):
-        dp = numpy.full((len(self.data)+1, 2), -math.inf)
-        parent = numpy.full((len(self.data), 2), -math.inf)
+        dp = numpy.full((len(self.data)+1, self.stateCount), -math.inf)
+        parent = numpy.full((len(self.data), self.stateCount), -math.inf)
         path = numpy.zeros(len(self.data), dtype=int)
         dp[0] = self.stationaryDistribution
-
         for i in range(0, self.stateCount):
             dp[0][i] = math.log(dp[0][i]) + math.log(self.distributions[i].pdf(self.data[i]))
 
@@ -89,6 +89,87 @@ class HMM:
                 a_file.write("\"La Nina\"" + "\n" )
         a_file.close()
 
+    def normalize(arr):
+        sum = numpy.sum(arr)
+        arr = arr/sum
+        return arr
+
+    def runBaumWelch(self):
+        trMat = deepcopy(self.transitionMatrix)
+        distrib = deepcopy(self.distributions)
+
+        for step in range(0, 20):
+            forward = numpy.full((len(self.data)+1, self.stateCount), 0.0)
+            backward = numpy.full((len(self.data)+1, self.stateCount), 0.0)
+            pieS = numpy.full((len(self.data)+1, self.stateCount), 0.0)
+            pieSS = numpy.full((len(self.data)+1, self.stateCount, self.stateCount), 0.0)
+
+            forward[0] = self.calcStationaryDistribution(trMat)
+            for i in range(0, self.stateCount):
+                forward[0][i] = forward[0][i]*(distrib[i].pdf(self.data[0]))
+            forward[0] = forward[0]/numpy.sum(forward[0])
+
+            for j in range(1, len(self.data)):
+                for i in range(0, self.stateCount):
+                    for k in range(0, self.stateCount):
+                        forward[j][i] += forward[j-1][k]*trMat[k][i]*distrib[i].pdf(self.data[j])
+                forward[j] = forward[j]/numpy.sum(forward[j])
+
+            for i in range(0, self.stateCount):
+                backward[len(self.data)-1][i] = 1/self.stateCount
+
+            for j in range(len(self.data)-2, -1, -1):
+                for i in range(0, self.stateCount):
+                    for k in range(0, self.stateCount):
+                        backward[j][i] += backward[j+1][k]*trMat[i][k]*distrib[k].pdf(self.data[j+1])
+                backward[j] = backward[j]/numpy.sum(backward[j])
+
+            for i in range(0, len(self.data)):
+                for k in range(0, self.stateCount):
+                    pieS[i][k] = forward[i][k]*backward[i][k]
+                pieS[i] = pieS[i]/numpy.sum(pieS[i])
+            
+            for i in range(0, len(self.data)-1):
+                for k in range(0, self.stateCount):
+                    for l in range(0, self.stateCount):
+                        pieSS[i][k][l] = forward[i][k]*trMat[k][l]*distrib[l].pdf(self.data[i+1])*backward[i+1][l]
+                pieSS[i] = pieSS[i]/numpy.sum(pieSS[i])
+
+            for k in range(0, self.stateCount):
+                for l in range(0, self.stateCount):
+                    trMat[k][l] = 0
+                    for i in range(0, len(self.data)-1):
+                        trMat[k][l] += pieSS[i][k][l]
+                trMat[k] = trMat[k]/numpy.sum(trMat[k])
+            
+            for i in range(0, self.stateCount):
+                distrib[i].mean = 0
+                sum = 0
+                for j in range(0, len(self.data)):
+                    distrib[i].mean += pieS[j][i]*self.data[j]
+                    sum += pieS[j][i]
+                distrib[i].mean = distrib[i].mean/sum
+
+            for i in range(0, self.stateCount):
+                distrib[i].stDeviation = 0
+                sum = 0
+                for j in range(0, len(self.data)):
+                    distrib[i].stDeviation += pieS[j][i]*((self.data[j] - distrib[i].mean)**2)
+                    sum += pieS[j][i]
+                distrib[i].stDeviation = math.sqrt(distrib[i].stDeviation/sum)
+
+        print(trMat)
+        distrib[0].print()
+        distrib[1].print()
+        # print(forward)
+        # print(backward)
+        # print(pieS)
+        # out = open("out", "w")
+        # for row in pieS:
+        #     out.write(str(row) + "\n")
+        # out.close()
+
 hmm = HMM()
 hmm.readFile("Input/data.txt", "Input/parameters.txt.txt")
 hmm.runViterbi()
+hmm.runBaumWelch()
