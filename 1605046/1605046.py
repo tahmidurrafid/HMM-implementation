@@ -165,24 +165,24 @@ class HMM:
         file.write(str(self.stateCount) + "\n")
         for i in range(0, self.stateCount):
             for j in range(0, self.stateCount):
-                file.write(str(round(self.transitionMatrix[i][j], 5)) + " ")
+                file.write(str(self.transitionMatrix[i][j]) + " ")
             file.write("\n")
         for i in range(0, self.stateCount):
-            file.write(str(round(self.distributions[i].mean, 5)) + " ")
+            file.write(str(self.distributions[i].mean) + " ")
         file.write("\n")
         for i in range(0, self.stateCount):
-            file.write(str(round(self.distributions[i].stDeviation**2, 5)) + " ")
+            file.write(str(self.distributions[i].stDeviation**2) + " ")
         file.write("\n")
         for i in range(0, self.stateCount):
-            file.write(str(round(self.stationaryDistribution[i], 5)) + " ")
+            file.write(str(self.stationaryDistribution[i]) + " ")
         file.write("\n")
         file.close()
 
 hmm = HMM()
 hmm.readFile("Input/data.txt", "Input/parameters.txt.txt")
 hmm.runViterbi()
-hmm.outputPath("viterbi_states_wo_learning.txt", ["\"El Nino\"", "\"La Nina\""])
+hmm.outputPath("myOutput/viterbi_states_wo_learning.txt", ["\"El Nino\"", "\"La Nina\""])
 hmm.runBaumWelch()
-hmm.outputParameters("parameters_learned.txt")
+hmm.outputParameters("myOutput/parameters_learned.txt")
 hmm.runViterbi()
-hmm.outputPath("viterbi_states_after_learning.txt", ["\"El Nino\"", "\"La Nina\""])
+hmm.outputPath("myOutput/viterbi_states_after_learning.txt", ["\"El Nino\"", "\"La Nina\""])
